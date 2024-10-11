@@ -1,23 +1,47 @@
+'use client';
+
 import { getArticleData, getAllTutorials, getArticlesForTutorial } from '../../../../utils/markdown';
 import Link from 'next/link';
 import ReactMarkdown from 'react-markdown';
+import { Prism as SyntaxHighlighter } from 'react-syntax-highlighter';
+import { vscDarkPlus } from 'react-syntax-highlighter/dist/cjs/styles/prism';
+import { useState, useCallback } from 'react';
 
-export async function generateStaticParams() {
-  const tutorials = getAllTutorials();
-  const paths = [];
+const CopyButton = ({ text }: { text: string }) => {
+  const [isCopied, setIsCopied] = useState(false);
 
-  for (const tutorial of tutorials) {
-    const articles = getArticlesForTutorial(tutorial);
-    for (const article of articles) {
-      paths.push({
-        slug: tutorial,
-        article: article.slug,
-      });
-    }
-  }
+  const copyToClipboard = useCallback(() => {
+    navigator.clipboard.writeText(text).then(() => {
+      setIsCopied(true);
+      setTimeout(() => setIsCopied(false), 2000);
+    });
+  }, [text]);
 
-  return paths;
-}
+  return (
+    <button
+      onClick={copyToClipboard}
+      className="absolute top-2 right-2 bg-gray-700 hover:bg-gray-600 text-white font-bold py-1 px-2 rounded text-xs"
+    >
+      {isCopied ? 'Copied!' : 'Copy'}
+    </button>
+  );
+};
+
+const CodeBlock = ({ language, value }: { language: string; value: string }) => {
+  return (
+    <div className="relative">
+      <CopyButton text={value} />
+      <SyntaxHighlighter
+        style={vscDarkPlus}
+        language={language}
+        PreTag="div"
+        className="rounded-md overflow-hidden"
+      >
+        {value}
+      </SyntaxHighlighter>
+    </div>
+  );
+};
 
 export default function ArticlePage({ params }: { params: { slug: string; article: string } }) {
   const articleData = getArticleData(params.slug, `${params.article}.md`);
@@ -42,7 +66,27 @@ export default function ArticlePage({ params }: { params: { slug: string; articl
 
       <h1 className="text-4xl font-bold mb-8">{articleData.title}</h1>
       <div className="prose prose-invert prose-lg">
-        <ReactMarkdown>{articleData.content}</ReactMarkdown>
+        <ReactMarkdown
+          components={{
+            code({node, inline, className, children, ...props}) {
+              const match = /language-(\w+)/.exec(className || '')
+              return !inline && match ? (
+                <div className="my-8">
+                  <CodeBlock
+                    language={match[1]}
+                    value={String(children).replace(/\n$/, '')}
+                  />
+                </div>
+              ) : (
+                <code {...props} className={className}>
+                  {children}
+                </code>
+              )
+            }
+          }}
+        >
+          {articleData.content}
+        </ReactMarkdown>
       </div>
       <div className="mt-12 flex justify-between">
         {prevArticle && (
